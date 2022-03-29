@@ -1,3 +1,5 @@
+# Build Docker image
+
 `docker image build --tag yale-celi-api-companies-post:0.1 .`
 
 # Update Airtable extended table
