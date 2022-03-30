@@ -14,7 +14,7 @@
    - In "Preview" tab copy value of the `data` variable
    - Save the copied value to `extended-table.json`
 
-#### Step \_. Create a Box application for API calls
+<!-- #### Step \_. Create a Box application for API calls
 
 1. Log in Box developer account
 
@@ -47,7 +47,7 @@
    - Click on the "App Settings" and turn on "Disable unpublished apps by default"
    - Click on the "Add App", enter "Client ID" of the new app and click "Authorize"
    - The new app should be added to the list of server authentication apps. Click on "..." button next to the new app and select "Enable App"
-   - Later, while testing the Lambda function an 403 error ("Access denied - insufficient permission") may appear. One way of solving it might be broadening the scope of "Application scope" (see step above) and "Reauthorizing App" in "Custom Apps Manager" (in the same place as the "Enable App" option).
+   - Later, while testing the Lambda function an 403 error ("Access denied - insufficient permission") may appear. One way of solving it might be broadening the scope of "Application scope" (see step above) and "Reauthorizing App" in "Custom Apps Manager" (in the same place as the "Enable App" option). -->
 
 # Testing locally
 
