@@ -12,8 +12,9 @@ import unicodedata
 
 def lambda_handler(event, context):
     extended_table = ExtendedTableGetter().get_table()
-    original_table = OriginalTableGetter().get_table()
-
+    original_table = OriginalTableTransformer().get_table(
+        OriginalTableExtractor().fetch_table_from_api()
+    )
 
     jwtauth = 'from_settings_file' in dir(JWTAuth)
     return {
@@ -84,12 +85,27 @@ class ExtendedTableGetter:
         return [{**item, 'slug': slugify(item['Name'])} for item in table_data]
 
 
-class OriginalTableGetter:
+class OriginalTableExtractor:
+    """
+    Extracts table data from the original Yale CELI list
+    """
+    def __init__(self) -> None:
+        self.source = 'https://yale.app.box.com/s/11lqy1d3yn1kf9xa3r96k9sb6w5m4qea'
+        self.client = Client(JWTAuth.from_settings_file('jwt_box_config.json'))
+
+    def fetch_table_from_api(self) -> pd.DataFrame:
+        file = self.client.get_shared_item(self.source)
+        return pd.read_excel(file.content(), header=None, skiprows=2)
+
+
+class OriginalTableTransformer:
     """
     Extracts and transforms table data from the original Yale CELI list
     """
-    def get_table(self):
-        self._set_initial_table_data()
+    def get_table(self,
+            df: pd.DataFrame,
+        ) -> t.List[t.Dict[str, str]]:
+        self._set_initial_table_data(df)
         self._add_status_column()
         self._fill_nulls_in_status_column()
         self._format_status_column()
@@ -101,9 +117,10 @@ class OriginalTableGetter:
         self._add_slug_column()
         return self._transform_pandas_df_to_list_of_dicts()
 
-    def _set_initial_table_data(self) -> None:
-        self.df = pd.read_excel('mock-original-table.xlsx', header=None, skiprows=1)
-        del self.df[0] # temp
+    def _set_initial_table_data(self,
+            df: pd.DataFrame,
+        ) -> None:
+        self.df = df
 
     def _add_status_column(self) -> None:
         """Add 'status' column retrieving string 'Withdrawal' from 
@@ -118,7 +135,8 @@ class OriginalTableGetter:
 
     def _format_status_column(self) -> None:
         """Format 'status' column"""
-        self.df['status'] = self.df['status'].apply(lambda x: str(x).title().strip() if x else '')
+        self.df['status'] = self.df['status'].apply(
+            lambda x: str(x).title().strip())
 
     def _remove_rows_empty_in_Name_column(self) -> None:
         """Drop rows which are empty in 'Name' column"""
