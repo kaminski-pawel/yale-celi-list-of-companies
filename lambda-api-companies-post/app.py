@@ -24,8 +24,8 @@ def lambda_handler(event, context):
         'boto3_version': boto3.__version__,
         # 'pandas_version': pd.__version__,
         # 'jwtauth': jwtauth,
-        # 'extended_table': extended_table,
-        'original_table': original_table,
+        'extended_table': extended_table,
+        # 'original_table': original_table,
     }
 
 
@@ -33,6 +33,10 @@ class ExtendedTableGetter:
     """
     Extracts and transforms table data from `extended-table.json`
     """
+
+    def __init__(self):
+        self._prefix = 'e_' # 'e' as in 'extended'
+
     def get_table(self):
         self._set_initial_table_data()
         self._set_columns_mapping()
@@ -64,9 +68,15 @@ class ExtendedTableGetter:
         """
         Extracts table data into list of human readable dicts
         """
-        return [{self._columns[header]: self._prepare_cell(cell)
+        # return [{self._columns[header]: self._prepare_cell(cell)
+        return [{self._prepare_header(header): self._prepare_cell(cell)
             for header, cell in row['cellValuesByColumnId'].items()}
             for row in self.data['table']['rows'] if row.get('cellValuesByColumnId', {})]
+
+    def _prepare_header(self, header: str) -> str:
+        """Transforms 'Market Cap' to 'e_market_cap' str"""
+        _header = self._prefix + self._columns[header]
+        return _header.lower().strip().replace(' ', '_')
 
     def _prepare_cell(self, cell: str) -> str:
         """
@@ -84,7 +94,7 @@ class ExtendedTableGetter:
         """
         Iterates over list of dicts and adds a slug to each object
         """
-        return [{**item, 'slug': slugify(item['Name'])} for item in table_data]
+        return [{**item, 'slug': slugify(item['e_name'])} for item in table_data]
 
 
 class OriginalTableGetter:
