@@ -15,17 +15,9 @@ import unicodedata
 def lambda_handler(event, context):
     extended_table = ExtendedTableGetter().get_table()
     original_table = OriginalTableGetter().get_table()
-    # original_table = OriginalTableTransformer().get_table(
-    #     OriginalTableExtractor().fetch_table_from_api()
-    # )
-    # jwtauth = 'from_settings_file' in dir(JWTAuth)
+    table = join_on_key(extended_table, original_table, join_on='slug')
     return {
-        # 'boxsdk_version': boxsdk.__version__,
-        'boto3_version': boto3.__version__,
-        # 'pandas_version': pd.__version__,
-        # 'jwtauth': jwtauth,
-        'extended_table': extended_table,
-        # 'original_table': original_table,
+        'table': table
     }
 
 
@@ -68,15 +60,16 @@ class ExtendedTableGetter:
         """
         Extracts table data into list of human readable dicts
         """
-        # return [{self._columns[header]: self._prepare_cell(cell)
         return [{self._prepare_header(header): self._prepare_cell(cell)
             for header, cell in row['cellValuesByColumnId'].items()}
             for row in self.data['table']['rows'] if row.get('cellValuesByColumnId', {})]
 
     def _prepare_header(self, header: str) -> str:
-        """Transforms 'Market Cap' to 'e_market_cap' str"""
-        _header = self._prefix + self._columns[header]
-        return _header.lower().strip().replace(' ', '_')
+        """Transforms 'Market Cap' to 'e_market_cap' str (except 'slug' field)"""
+        _header = self._columns[header].lower().strip()
+        if _header == 'slug':
+            return _header
+        return self._prefix + _header.replace(' ', '_')
 
     def _prepare_cell(self, cell: str) -> str:
         """
@@ -137,10 +130,10 @@ class OriginalTableGetter:
         return soup.findAll('section', {'class': 'layout layout--one-column'})
 
     def _prepare_header(self, header: str, prefix: str = '') -> str:
-        """Converts '\ufeffName' to 'someprefix_name' str"""
+        """Converts '\ufeffName' to 'someprefix_name' str (except 'slug' field)"""
         s = header.strip().lower()
         s = s.replace('\ufeff', '')
-        return prefix + s
+        return s if s == 'slug' else prefix + s
 
     def _get_headers(self,
             tag_elem: bs4.element.Tag,
@@ -168,13 +161,22 @@ class OriginalTableGetter:
             table: t.List[t.Dict[str, str]],
         ) -> t.List[t.Dict[str, str]]:
         """Omits empty rows and adds additional fields"""
-        return [{**row, **self._get_status_field(tag_elem)} for row in table if row]
+        return [{
+            **row,
+            **self._get_status_field(tag_elem),
+            **self._get_slug_field(row),
+        } for row in table if row]
 
     def _get_status_field(self,
             tag_elem: bs4.element.Tag,
         ) -> t.Dict[str, str]:
         """Returns dictionary for status: e.g. {'status': 'scalingback'}"""
         return {self._prefix + 'status': tag_elem.attrs.get('id')}
+
+    def _get_slug_field(self,
+            row: t.Dict[str, str],
+        ) -> t.Dict[str, str]:
+        return {'slug': slugify(row.get(self._prefix + 'name'))}
 
     def _flatten_tables_into_one(self,
             multiple_tables: t.List[t.List[t.Dict[str, str]]]
@@ -183,7 +185,7 @@ class OriginalTableGetter:
         return [row for tbl in multiple_tables for row in tbl]
 
 
-def slugify(value):
+def slugify(value: str) -> str:
     """
     Converts to lowercase ascii, removes non-alphanumerics characters
     and converts spaces to hyphens. Also strips leading and
@@ -192,3 +194,16 @@ def slugify(value):
     value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub('[^\w\s-]', '', value).strip().lower()
     return re.sub('[-\s]+', '-', value)
+
+def join_on_key(
+        l1: t.List[t.Dict[str, t.Any]],
+        l2: t.List[t.Dict[str, t.Any]],
+        join_on: str,
+    ) -> t.List[t.Dict[str, t.Any]]:
+    """
+    Create one big dictionary where the `join_on` value serves as a dict key,
+    merging values of two lists of dictionaries, `l1` and `l2`. 
+    Return as a list of merged dictionaries.
+    """
+    d1 = {d[join_on]:d for d in l1}
+    return [dict(d, **d1.get(d[join_on], {})) for d in l2]
