@@ -1,9 +1,11 @@
 # from boxsdk import Client
 # from boxsdk import JWTAuth
 import boto3
+from boto3.dynamodb.types import TypeSerializer
+import botocore
 import bs4
-from itertools import zip_longest
 import json
+import logging
 # import numpy as np
 # import pandas as pd
 import re
@@ -12,12 +14,19 @@ import typing as t
 import unicodedata
 
 
+logger = logging.getLogger(__name__)
+DYNAMODB_TABLE = 'YaleSonnenfeldList'
+AWS_REGION = 'eu-north-1'
+
+
 def lambda_handler(event, context):
     extended_table = ExtendedTableGetter().get_table()
     original_table = OriginalTableGetter().get_table()
-    table = join_on_key(extended_table, original_table, join_on='slug')
+    table_data = join_on_key(extended_table, original_table, join_on='slug')
+    responses = DynamoDbWriter().batch_write_items(table_data)
     return {
-        'table': table
+        'response': responses,
+        'message': '?',
     }
 
 
@@ -183,6 +192,97 @@ class OriginalTableGetter:
         ) -> t.List[t.Dict]:
         """Transforms [[{}, {}], [{}, {}]] into [{}, {}, {}, {}]"""
         return [row for tbl in multiple_tables for row in tbl]
+
+
+class DynamoDbWriter:
+    def __init__(self):
+        self._aws_region = AWS_REGION
+        self._dynamodb_table = DYNAMODB_TABLE
+        self._batch_write_item_limit = 25
+        self._client = boto3.client('dynamodb', self._aws_region)
+
+    def batch_write_items(self,
+            items: t.List[t.Any],
+        ):
+        wrapper = DynamoDbWrapper(self._dynamodb_table)
+        responses = []
+        for batch in self._split_into_N_element_sublists(items, self._batch_write_item_limit):
+            responses.append(self._batch_write_item(
+                wrapper.serialize_data_for_batch_write_item(batch)
+            ))
+        return responses
+
+    def _batch_write_item(self,
+            request_items: t.Dict[str, t.List[t.Dict[str, t.Any]]],
+        ) -> t.Dict[str, t.Any]:
+        """Puts or deletes multiple items in one or more tables
+        https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb.html#DynamoDB.Client.batch_write_item"""
+        try:
+            return self._client.batch_write_item(
+                RequestItems=request_items,
+                ReturnConsumedCapacity='TOTAL',
+                ReturnItemCollectionMetrics='SIZE'
+            )
+        except botocore.exceptions.ParamValidationError as e:
+            logger.exception(f"Couldn't write data to {self._dynamodb_table}." + e)
+
+    def _split_into_N_element_sublists(self,
+            a_list: t.List[t.Any],
+            N: int,
+        ) -> t.List[t.Any]:
+        """Splits a list into a list of N lists"""
+        return [a_list[x:x+N] for x in range(0, len(a_list), N)]
+
+
+class DynamoDbWrapper:
+    """Wraps data for DynamoDb in a syntax required by boto3:
+    {
+        'string': [
+            {
+                'PutRequest': {
+                    'Item': {
+                        'string': {
+                            'S': 'string',
+                            ...
+                        }
+                    }
+                },
+                'DeleteRequest': {
+                    'Key': {
+                        'string': {
+                            'S': 'string',
+                            ...
+                        }
+                    }
+                }
+            },
+        ]
+    }
+    """
+    def __init__(self, dynamodb_table):
+        self._dynamodb_table = dynamodb_table
+        self._operation = 'PutRequest' # | 'DeleteRequest'
+
+    def serialize_data_for_batch_write_item(self,
+            items: t.List[t.Any],
+        ) -> t.Dict[str, t.List[t.Dict[str, t.Any]]]:
+        return {
+            self._dynamodb_table: [
+                {
+                    self._operation: {
+                        'Item': self._serialize_to_dynamodb(item)
+                    }
+                }
+            for item in items]
+        }
+
+    def _serialize_to_dynamodb(self,
+            dictionary: t.Dict[str, t.Any],
+        ) -> t.Dict[str, t.Dict[str, t.Any]]:
+        """Return one Item serialized in compliance with boto3.
+        E.g. {'key': 'val'} will be transformed into {'key': {'S': 'val'}}"""
+        return {k: TypeSerializer().serialize(v) for k, v in dictionary.items()}
+
 
 
 def slugify(value: str) -> str:
