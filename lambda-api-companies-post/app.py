@@ -19,12 +19,12 @@ def lambda_handler(event, context):
     extended_table = ExtendedTableGetter().get_table()
     original_table = OriginalTableGetter().get_table()
     table_data = join_on_key(extended_table, original_table, join_on='slug')
-    responses = DynamoDbWriter().batch_write_items(
+    DynamoDbWriter().batch_write_items(
         [row for row in table_data if row['slug']]
     )
     return {
-        'response': responses,
-        'message': '?',
+        'status': 201,
+        'message': 'Function was executed without errors',
     }
 
 
