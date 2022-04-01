@@ -174,7 +174,7 @@ class OriginalTableGetter:
             **row,
             **self._get_status_field(tag_elem),
             **self._get_slug_field(row),
-            **{'last_updated': self._timestamp.last_updated},
+            **self._get_timestamps(),
         } for row in table if row]
 
     def _get_status_field(self,
@@ -188,6 +188,12 @@ class OriginalTableGetter:
         ) -> t.Dict[str, str]:
         return {'slug': slugify(row.get(self._prefix + 'name'))}
 
+    def _get_timestamps(self):
+        return {
+            f'{self._prefix}last_updated': self._timestamp.last_updated,
+            'timestamp': self._timestamp.timestamp,
+        }
+
     def _flatten_tables_into_one(self,
             multiple_tables: t.List[t.List[t.Dict[str, str]]]
         ) -> t.List[t.Dict]:
@@ -198,7 +204,12 @@ class OriginalTableGetter:
 class LastUpdatedGetter:
     def __init__(self, soup: bs4.BeautifulSoup) -> None:
         self._soup = soup
+        self.timestamp = self._get_timestamp()
         self._last_updated = self._to_iso(self._to_datetime(self._find_last_updated()))
+       
+    def _get_timestamp(self) -> str:
+        """Returns UTC time '2022-04-01T14:38:14.640443+00:00' """
+        return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     @property
     def last_updated(self) -> str:
