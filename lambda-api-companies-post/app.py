@@ -35,7 +35,7 @@ class ExtendedTableGetter:
     """
 
     def __init__(self):
-        self._prefix = 'e_' # 'e' as in 'extended'
+        self._prefix = 'e_'  # 'e' as in 'extended'
 
     def get_table(self):
         self._set_initial_table_data()
@@ -51,7 +51,8 @@ class ExtendedTableGetter:
         """
         Returns a mapping of Airtable internal field id to human readable field names
         """
-        self._columns = {item['id']: item['name'] for item in self.data['table']['columns']}
+        self._columns = {item['id']: item['name']
+                         for item in self.data['table']['columns']}
 
     def _set_choices_mapping(self) -> t.Dict[str, str]:
         """
@@ -69,8 +70,8 @@ class ExtendedTableGetter:
         Extracts table data into list of human readable dicts
         """
         return [{self._prepare_header(header): self._prepare_cell(cell)
-            for header, cell in row['cellValuesByColumnId'].items()}
-            for row in self.data['table']['rows'] if row.get('cellValuesByColumnId', {})]
+                 for header, cell in row['cellValuesByColumnId'].items()}
+                for row in self.data['table']['rows'] if row.get('cellValuesByColumnId', {})]
 
     def _prepare_header(self, header: str) -> str:
         """Transforms 'Market Cap' to 'e_market_cap' str (except 'slug' field)"""
@@ -90,8 +91,8 @@ class ExtendedTableGetter:
         return cell
 
     def _update_table_data_with_slugs(self,
-            table_data: t.List[t.Dict[str, str]],
-        ) -> t.List[t.Dict[str, str]]:
+                                      table_data: t.List[t.Dict[str, str]],
+                                      ) -> t.List[t.Dict[str, str]]:
         """
         Iterates over list of dicts and adds a slug to each object
         """
@@ -116,14 +117,14 @@ class OriginalTableGetter:
         return requests.get(self._source_url).content
 
     def _parse_html(self,
-            markup: bytes,
-        ) -> bs4.BeautifulSoup:
+                    markup: bytes,
+                    ) -> bs4.BeautifulSoup:
         """Represent html docment as a nested structure"""
         return bs4.BeautifulSoup(markup, 'html.parser')
 
     def _get_multiple_tables(self,
-            soup: bs4.BeautifulSoup,
-        ) -> t.List[t.List[t.Dict[str, str]]]:
+                             soup: bs4.BeautifulSoup,
+                             ) -> t.List[t.List[t.Dict[str, str]]]:
         """Iterates over <section> tags, extracts and transforms tables.
         Tables are nested: [[{}, {}], [{}, {}]]"""
         final_table = []
@@ -134,8 +135,8 @@ class OriginalTableGetter:
         return final_table
 
     def _get_html_sections_with_tables(self,
-            soup: bs4.BeautifulSoup,
-        ) -> t.List[bs4.element.Tag]:
+                                       soup: bs4.BeautifulSoup,
+                                       ) -> t.List[bs4.element.Tag]:
         return soup.findAll('section', {'class': 'layout layout--one-column'})
 
     def _prepare_header(self, header: str, prefix: str = '') -> str:
@@ -145,30 +146,30 @@ class OriginalTableGetter:
         return s if s == 'slug' else prefix + s
 
     def _get_headers(self,
-            tag_elem: bs4.element.Tag,
-        ) -> t.List[str]:
+                     tag_elem: bs4.element.Tag,
+                     ) -> t.List[str]:
         """Returns ['header1', 'header2'] from <th> tags"""
         return [self._prepare_header(th.getText(), prefix=self._prefix)
                 for th in tag_elem.findAll('th')]
 
     def _extract_tablerow(self,
-            tr: bs4.element.Tag,
-            headers: t.List[t.Dict[str, str]],
-        ) -> t.Dict[str, str]:
+                          tr: bs4.element.Tag,
+                          headers: t.List[t.Dict[str, str]],
+                          ) -> t.Dict[str, str]:
         """Returns {'header1': 'valFromTD1', 'header2': 'valFromTD2'} object"""
         return dict(zip(headers, [td.getText() for td in tr.findAll('td')]))
 
     def _extract_table(self,
-            tag_elem: bs4.element.Tag,
-            headers: t.List[t.Dict[str, str]],
-        ) -> t.List[t.Dict[str, str]]:
+                       tag_elem: bs4.element.Tag,
+                       headers: t.List[t.Dict[str, str]],
+                       ) -> t.List[t.Dict[str, str]]:
         """Returns list of unprocessed tablerows"""
         return [self._extract_tablerow(tr, headers) for tr in tag_elem.findAll('tr')]
 
     def _transform_table(self,
-            tag_elem: bs4.element.Tag,
-            table: t.List[t.Dict[str, str]],
-        ) -> t.List[t.Dict[str, str]]:
+                         tag_elem: bs4.element.Tag,
+                         table: t.List[t.Dict[str, str]],
+                         ) -> t.List[t.Dict[str, str]]:
         """Omits empty rows and adds additional fields"""
         return [{
             **row,
@@ -178,14 +179,14 @@ class OriginalTableGetter:
         } for row in table if row]
 
     def _get_status_field(self,
-            tag_elem: bs4.element.Tag,
-        ) -> t.Dict[str, str]:
+                          tag_elem: bs4.element.Tag,
+                          ) -> t.Dict[str, str]:
         """Returns dictionary for status: e.g. {'status': 'scalingback'}"""
         return {self._prefix + 'status': tag_elem.attrs.get('id')}
 
     def _get_slug_field(self,
-            row: t.Dict[str, str],
-        ) -> t.Dict[str, str]:
+                        row: t.Dict[str, str],
+                        ) -> t.Dict[str, str]:
         return {'slug': slugify(row.get(self._prefix + 'name'))}
 
     def _get_timestamps(self):
@@ -195,8 +196,8 @@ class OriginalTableGetter:
         }
 
     def _flatten_tables_into_one(self,
-            multiple_tables: t.List[t.List[t.Dict[str, str]]]
-        ) -> t.List[t.Dict]:
+                                 multiple_tables: t.List[t.List[t.Dict[str, str]]]
+                                 ) -> t.List[t.Dict]:
         """Transforms [[{}, {}], [{}, {}]] into [{}, {}, {}, {}]"""
         return [row for tbl in multiple_tables for row in tbl]
 
@@ -205,8 +206,9 @@ class LastUpdatedGetter:
     def __init__(self, soup: bs4.BeautifulSoup) -> None:
         self._soup = soup
         self.timestamp = self._get_timestamp()
-        self._last_updated = self._to_iso(self._to_datetime(self._find_last_updated()))
-       
+        self._last_updated = self._to_iso(
+            self._to_datetime(self._find_last_updated()))
+
     def _get_timestamp(self) -> str:
         """Returns UTC time '2022-04-01T14:38:14.640443+00:00' """
         return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -223,16 +225,16 @@ class LastUpdatedGetter:
         return self._soup.find('strong', text='Last Updated')
 
     def _find_last_updated_value(self,
-            tag_elem: bs4.element.Tag,
-        ) -> bs4.element.NavigableString:
+                                 tag_elem: bs4.element.Tag,
+                                 ) -> bs4.element.NavigableString:
         try:
             return list(tag_elem.parent.children)[-1].replace(':', '').strip()
         except (AttributeError, IndexError):
             return ''
 
     def _to_datetime(self,
-            t: bs4.element.NavigableString,
-        ) -> datetime.datetime:
+                     t: bs4.element.NavigableString,
+                     ) -> datetime.datetime:
         """"Returns datetime.datetime(2022, 4, 1, 0, 0) from 'April 1, 2022' """
         try:
             return datetime.datetime.strptime(t, '%B %d, %Y')
@@ -240,8 +242,8 @@ class LastUpdatedGetter:
             return None
 
     def _to_iso(self,
-            t: datetime.datetime
-        ) -> str:
+                t: datetime.datetime
+                ) -> str:
         """"Returns '2022-04-01T00:00:00' from datetime.datetime(2022, 4, 1, 0, 0)"""
         return t.isoformat()
 
@@ -254,8 +256,8 @@ class DynamoDbWriter:
         self._client = boto3.client('dynamodb', self._aws_region)
 
     def batch_write_items(self,
-            items: t.List[t.Any],
-        ):
+                          items: t.List[t.Any],
+                          ):
         wrapper = DynamoDbWrapper(self._dynamodb_table)
         responses = []
         for batch in self._split_into_N_element_sublists(items, self._batch_write_item_limit):
@@ -265,8 +267,8 @@ class DynamoDbWriter:
         return responses
 
     def _batch_write_item(self,
-            request_items: t.Dict[str, t.List[t.Dict[str, t.Any]]],
-        ) -> t.Dict[str, t.Any]:
+                          request_items: t.Dict[str, t.List[t.Dict[str, t.Any]]],
+                          ) -> t.Dict[str, t.Any]:
         """Puts or deletes multiple items in one or more tables
         https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/dynamodb.html#DynamoDB.Client.batch_write_item"""
         try:
@@ -276,12 +278,13 @@ class DynamoDbWriter:
                 ReturnItemCollectionMetrics='SIZE'
             )
         except botocore.exceptions.ParamValidationError as e:
-            logger.exception(f"Couldn't write data to {self._dynamodb_table}." + e)
+            logger.exception(
+                f"Couldn't write data to {self._dynamodb_table}." + e)
 
     def _split_into_N_element_sublists(self,
-            a_list: t.List[t.Any],
-            N: int,
-        ) -> t.List[t.Any]:
+                                       a_list: t.List[t.Any],
+                                       N: int,
+                                       ) -> t.List[t.Any]:
         """Splits a list into a list of N lists"""
         return [a_list[x:x+N] for x in range(0, len(a_list), N)]
 
@@ -311,13 +314,14 @@ class DynamoDbWrapper:
         ]
     }
     """
+
     def __init__(self, dynamodb_table):
         self._dynamodb_table = dynamodb_table
-        self._operation = 'PutRequest' # | 'DeleteRequest'
+        self._operation = 'PutRequest'  # | 'DeleteRequest'
 
     def serialize_data_for_batch_write_item(self,
-            items: t.List[t.Any],
-        ) -> t.Dict[str, t.List[t.Dict[str, t.Any]]]:
+                                            items: t.List[t.Any],
+                                            ) -> t.Dict[str, t.List[t.Dict[str, t.Any]]]:
         return {
             self._dynamodb_table: [
                 {
@@ -325,16 +329,15 @@ class DynamoDbWrapper:
                         'Item': self._serialize_to_dynamodb(item)
                     }
                 }
-            for item in items]
+                for item in items]
         }
 
     def _serialize_to_dynamodb(self,
-            dictionary: t.Dict[str, t.Any],
-        ) -> t.Dict[str, t.Dict[str, t.Any]]:
+                               dictionary: t.Dict[str, t.Any],
+                               ) -> t.Dict[str, t.Dict[str, t.Any]]:
         """Return one Item serialized in compliance with boto3.
         E.g. {'key': 'val'} will be transformed into {'key': {'S': 'val'}}"""
         return {k: TypeSerializer().serialize(v) for k, v in dictionary.items()}
-
 
 
 def slugify(value: str) -> str:
@@ -343,19 +346,21 @@ def slugify(value: str) -> str:
     and converts spaces to hyphens. Also strips leading and
     trailing whitespaces.
     """
-    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = unicodedata.normalize('NFKD', value).encode(
+        'ascii', 'ignore').decode('ascii')
     value = re.sub('[^\w\s-]', '', value).strip().lower()
     return re.sub('[-\s]+', '-', value)
 
+
 def join_on_key(
-        l1: t.List[t.Dict[str, t.Any]],
-        l2: t.List[t.Dict[str, t.Any]],
-        join_on: str,
-    ) -> t.List[t.Dict[str, t.Any]]:
+    l1: t.List[t.Dict[str, t.Any]],
+    l2: t.List[t.Dict[str, t.Any]],
+    join_on: str,
+) -> t.List[t.Dict[str, t.Any]]:
     """
     Create one big dictionary where the `join_on` value serves as a dict key,
     merging values of two lists of dictionaries, `l1` and `l2`. 
     Return as a list of merged dictionaries.
     """
-    d1 = {d[join_on]:d for d in l1}
+    d1 = {d[join_on]: d for d in l1}
     return [dict(d, **d1.get(d[join_on], {})) for d in l2]
