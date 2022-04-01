@@ -1,59 +1,109 @@
-# Build Docker image
+# Lambda function to write to DynamoDB table
 
-`docker image build --tag yale-celi-api-companies-post:0.1 .`
+The function fetches data from official YALE CELI list and from extended unofficial datasource. The data is joined and written to DynamoDB table. The Lambda function code and dependencies is stored and distributed as a Docker container image.
 
-# Update Airtable extended table
+## Update Airtable extended table
 
-#### Step \_. Update Airtable extended table
+### Step 1. Update Airtable extended table
 
 1. Copy Airtable data
 
    - Open Developer Console (if using Google Chrome) in the "Network" tab
    - Go to `https://airtable.com/shri4fzaMzXrQ3ZHp/tbloSNFhgc3BjkuC8`
-   - Find `readSharedViewData` response (response to `https://airtable.com/v0.3/view/viw{someId}/readSharedViewData`).
+   - Find `readSharedViewData` response (response to `https://airtable.com/v0.3/view/viw${someId}/readSharedViewData`).
    - In "Preview" tab copy value of the `data` variable
    - Save the copied value to `extended-table.json`
 
-<!-- #### Step \_. Create a Box application for API calls
+## Deployment of Lambda function
 
-1. Log in Box developer account
+### Step 2. Create IAM permissions
 
-   - Create a [Box account](https://www.box.com/pricing/individual) (free individual account should be sufficient)
-   - Log into the [Box Developer Console](https://developers.box.com)
+1. Create IAM role
 
-2. Create New App
+   - For "Trusted entity type", choose "AWS Service"
+   - For "Use case", choose "Lambda"
 
-   - Go to "My Apps" and click on "Create New App"
-   - Select "Custom App"
-   - Select "Server Authentication with JWT, name the application and press "Create App"
+2. Create IAM policy
 
-3. Enable 2FA
+I tested with the following IAM policy attached to the IAM role.
 
-   - Go to "Account Settings"
-   - Set up 2-Step Verification
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "VisualEditor0",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:BatchGet*",
+        "dynamodb:DescribeTable",
+        "dynamodb:Get*",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:BatchWrite*",
+        "dynamodb:Delete*",
+        "dynamodb:Update*",
+        "dynamodb:PutItem",
+        "ecr:SetRepositoryPolicy",
+        "ecr:GetRepositoryPolicy"
+      ],
+      "Resource": ["${arn-of-image-in-ECR}", "${arn-of-dynamodb-table}"]
+    }
+  ]
+}
+```
 
-4. Generate a Public/Private Keypair
+### Step 3. Build and deploy image
 
-   - Go to app configuration ("My Apps"/[new-app]/"Configuration")
-   - Click on "Generate a Public/Private Keypair" and save the JSON config file
+1. Authenticate the Docker CLI to your Amazon ECR registry
 
-5. Set application scope
+```bash
+aws ecr get-login-password --region ${aws-region-name} | docker login --username AWS --password-stdin ${aws-account-id}.dkr.ecr.${aws-region-name}.amazonaws.com
+```
 
-   - In app configuration turn on all(?) "Content Actions", "Administrative Actions", "Developer Actions" and "Advanced Features"
+2. Build your Docker image
 
-6. Give the app admin authorization
+```bash
+docker build -t ${name-of-the-image} .
+```
 
-   - Go to the admin console (from the dropdown in the top right corner), then to "Apps" (left sidebar), finally to the "Custom Apps Manager"
-   - Click on the "App Settings" and turn on "Disable unpublished apps by default"
-   - Click on the "Add App", enter "Client ID" of the new app and click "Authorize"
-   - The new app should be added to the list of server authentication apps. Click on "..." button next to the new app and select "Enable App"
-   - Later, while testing the Lambda function an 403 error ("Access denied - insufficient permission") may appear. One way of solving it might be broadening the scope of "Application scope" (see step above) and "Reauthorizing App" in "Custom Apps Manager" (in the same place as the "Enable App" option). -->
+3. Create a repository in Amazon ECR using the create-repository command
 
-# Testing locally
+```bash
+aws ecr create-repository --region ${aws-region-name} --repository-name ${name-of-the-image} --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+```
 
-`docker container run --publish 9000:8080 yale-celi-api-companies-post:0.1`
-`curl "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{}' && echo`
+4. Tag your image to match your repository name using the docker tag command
 
-# TODO
+```bash
+docker tag ${name-of-the-image}:${tag} ${aws-account-id}.dkr.ecr.${aws-region-name}.amazonaws.com/${name-of-the-image}:${tag}
+```
+
+5. Deploy the image to Amazon ECR using the docker push command
+
+```bash
+docker push ${aws-account-id}.dkr.ecr.${aws-region-name}.amazonaws.com/${name-of-the-image}:${tag}
+```
+
+### Step 4. Create a Lambda function
+
+1. Open the "Functions" page of the Lambda console
+2. Choose "Create function"
+3. Choose the "Container image" option
+4. Under Basic information, do the following:
+
+- For "Container image URI", enter the URI of the Amazon ECR image that you created previously
+
+5. Choose "Create function"
+6. Change timeout to e.g. 10-15 seconds by editing "Configuration"/"General configuration"
+
+For more information see documentation at
+https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html
+
+```bash
+aws lambda update-function-code --function-name ${lambda-function-arn} --image-uri ${image-uri} --region=${aws-region}
+```
+
+## TODO
 
 - Serve `extended-table.json` from S3 or similar service (something that would make updating Airtable data easy).
