@@ -97,8 +97,21 @@ docker push ${aws-account-id}.dkr.ecr.${aws-region-name}.amazonaws.com/${name-of
 5. Choose "Create function"
 6. Change timeout to e.g. 10-15 seconds by editing "Configuration"/"General configuration"
 
-For more information see documentation at
-https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html
+For more information see the [documentation](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-images.html).
+
+### Step 5. Add an event trigger
+
+For example, the event trigger can be set up by the following steps:
+
+1. Create a new rule in the "EventBridge" service panel
+2. For "Rule type" select "Schedule"
+3. Set the schedule pattern, for example rate expression `12` `Hours` for a `schedule that runs at a regular rate`
+4. Select the Lambda function as a target
+5. Create the new rule
+
+### Updating
+
+In order to update build, push to ECR and run update-function-code command:
 
 ```bash
 aws lambda update-function-code --function-name ${lambda-function-arn} --image-uri ${image-uri} --region=${aws-region}
