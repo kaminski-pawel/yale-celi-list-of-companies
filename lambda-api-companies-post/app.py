@@ -1,13 +1,9 @@
-# from boxsdk import Client
-# from boxsdk import JWTAuth
 import boto3
 from boto3.dynamodb.types import TypeSerializer
 import botocore
 import bs4
 import json
 import logging
-# import numpy as np
-# import pandas as pd
 import re
 import requests
 import typing as t
