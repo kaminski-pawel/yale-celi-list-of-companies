@@ -2,6 +2,7 @@ import boto3
 from boto3.dynamodb.types import TypeSerializer
 import botocore
 import bs4
+import datetime
 import json
 import logging
 import re
@@ -108,6 +109,7 @@ class OriginalTableGetter:
 
     def get_table(self):
         soup = self._parse_html(self._fetch_html())
+        self._timestamp = LastUpdatedGetter(soup)
         return self._flatten_tables_into_one(self._get_multiple_tables(soup))
 
     def _fetch_html(self) -> bytes:
@@ -172,6 +174,7 @@ class OriginalTableGetter:
             **row,
             **self._get_status_field(tag_elem),
             **self._get_slug_field(row),
+            **{'last_updated': self._timestamp.last_updated},
         } for row in table if row]
 
     def _get_status_field(self,
@@ -190,6 +193,46 @@ class OriginalTableGetter:
         ) -> t.List[t.Dict]:
         """Transforms [[{}, {}], [{}, {}]] into [{}, {}, {}, {}]"""
         return [row for tbl in multiple_tables for row in tbl]
+
+
+class LastUpdatedGetter:
+    def __init__(self, soup: bs4.BeautifulSoup) -> None:
+        self._soup = soup
+        self._last_updated = self._to_iso(self._to_datetime(self._find_last_updated()))
+
+    @property
+    def last_updated(self) -> str:
+        """Returns iso formatted timestamp when the dataset was last updated by YALE CELI"""
+        return self._last_updated
+
+    def _find_last_updated(self) -> bs4.element.NavigableString:
+        return self._find_last_updated_value(self._find_last_updated_label())
+
+    def _find_last_updated_label(self) -> bs4.element.Tag:
+        return self._soup.find('strong', text='Last Updated')
+
+    def _find_last_updated_value(self,
+            tag_elem: bs4.element.Tag,
+        ) -> bs4.element.NavigableString:
+        try:
+            return list(tag_elem.parent.children)[-1].replace(':', '').strip()
+        except (AttributeError, IndexError):
+            return ''
+
+    def _to_datetime(self,
+            t: bs4.element.NavigableString,
+        ) -> datetime.datetime:
+        """"Returns datetime.datetime(2022, 4, 1, 0, 0) from 'April 1, 2022' """
+        try:
+            return datetime.datetime.strptime(t, '%B %d, %Y')
+        except ValueError:
+            return None
+
+    def _to_iso(self,
+            t: datetime.datetime
+        ) -> str:
+        """"Returns '2022-04-01T00:00:00' from datetime.datetime(2022, 4, 1, 0, 0)"""
+        return t.isoformat()
 
 
 class DynamoDbWriter:
